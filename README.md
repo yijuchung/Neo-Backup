@@ -27,6 +27,14 @@
 
 [![Neo Applications Banner](neo_banner.png)](https://github.com/NeoApplications)
 
+## Fork Notice :twisted_rightwards_arrows:
+
+> This repository is a fork of the original [**NeoApplications/Neo-Backup**](https://github.com/NeoApplications/Neo-Backup), which remains the canonical, upstream project. It is based on upstream and includes a small set of changes added after forking.
+>
+> Going forward, **only safety or usability patches** will be added here — no new features and no intentional divergence from upstream.
+>
+> All credit remains with the [original authors and contributors](https://github.com/NeoApplications/Neo-Backup/graphs/contributors) of Neo Backup. For the canonical project, its latest releases, and community, please refer to the [upstream repository](https://github.com/NeoApplications/Neo-Backup).
+
 Neo Backup (formerly OAndBackupX) is a fork of the famous OAndBackup with the aim to bring OAndBackup to 202X and part of Neo Applications suite. For now the app is already fully rewritten, coming up would be making it robust and adding some lengthily planned features which could ease the backup/restore workflow with any device. Therefore all types of contribution are always welcome.
 
 ## Features :abacus:
