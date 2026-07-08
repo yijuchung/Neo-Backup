@@ -58,11 +58,15 @@ import com.machiav3lli.backup.ui.pages.pref_restoreKillApps
 import com.machiav3lli.backup.ui.pages.pref_restorePermissions
 import com.machiav3lli.backup.ui.pages.pref_restoreTarCmd
 import com.machiav3lli.backup.utils.CryptoSetupException
+import com.machiav3lli.backup.utils.DEFAULT_KEY_LENGTH
+import com.machiav3lli.backup.utils.DEFAULT_SECRET_KEY_FACTORY_ALGORITHM
+import com.machiav3lli.backup.utils.ITERATION_COUNT
 import com.machiav3lli.backup.utils.copyDocumentToRootFile
 import com.machiav3lli.backup.utils.decryptStream
 import com.machiav3lli.backup.utils.extensions.Dirty
-import com.machiav3lli.backup.utils.getCryptoSalt
+import com.machiav3lli.backup.utils.generateKeyFromPassword
 import com.machiav3lli.backup.utils.getEncryptionPassword
+import com.machiav3lli.backup.utils.handleCryptoException
 import com.machiav3lli.backup.utils.isAllowDowngrade
 import com.machiav3lli.backup.utils.isDisableVerification
 import com.machiav3lli.backup.utils.isPGPEncryptionEnabled
@@ -80,7 +84,9 @@ import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Files
+import java.security.GeneralSecurityException
 import java.util.regex.Pattern
+import javax.crypto.SecretKey
 
 open class RestoreAppAction(context: Context, work: AppActionWork?, shell: ShellHandler) :
     BaseAppAction(context, work, shell) {
@@ -441,24 +447,60 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
 //    }
 //}
 
+    // The encryption key is derived once per restore (memoized) from the backup's own
+    // recorded KDF parameters, so the key stays correct even if the app-wide settings change,
+    // and the expensive PBKDF2 derivation isn't repeated for every data archive.
+    private var restoreKey: SecretKey? = null
+    private var restoreKeyComputed = false
+
+    @Throws(RestoreFailedException::class, CryptoSetupException::class)
+    protected fun deriveRestoreKey(backup: Backup): SecretKey? {
+        if (restoreKeyComputed) return restoreKey
+        restoreKeyComputed = true
+        // Only derive a key when THIS backup is actually password-encrypted. Gating on the global
+        // isPasswordEncryptionEnabled() alone would abort restores of non-encrypted backups (whose
+        // kdfSalt is null) whenever the user happens to have encryption enabled in settings. This
+        // mirrors the isEncrypted && isPasswordEncryptionEnabled() guard in openArchiveFile().
+        restoreKey = if (backup.isEncrypted && isPasswordEncryptionEnabled()) {
+            val password = getEncryptionPassword()
+            if (password.isEmpty())
+                throw RestoreFailedException("Password is empty, set it in preferences!")
+            val salt = backup.kdfSalt
+                ?: throw RestoreFailedException(
+                    "Backup metadata is missing the key-derivation salt; it was created with an unsupported encryption format"
+                )
+            try {
+                generateKeyFromPassword(
+                    password,
+                    salt,
+                    backup.kdfIterations ?: ITERATION_COUNT,
+                    backup.keyLength ?: DEFAULT_KEY_LENGTH,
+                    backup.kdfAlgorithm ?: DEFAULT_SECRET_KEY_FACTORY_ALGORITHM,
+                )
+            } catch (e: GeneralSecurityException) {
+                throw handleCryptoException(e)
+            }
+        } else null
+        return restoreKey
+    }
+
     @Throws(RestoreFailedException::class, CryptoSetupException::class, IOException::class)
     protected fun openArchiveFile(
         archive: StorageFile,
         isCompressed: Boolean,
         compressionType: String?,
         isEncrypted: Boolean,
-        iv: ByteArray?,
+        encryptionKey: SecretKey?,
     ): InputStream {
         var inputStream: InputStream = BufferedInputStream(archive.inputStream()!!)
         when {
             isEncrypted && isPasswordEncryptionEnabled() -> {
-                val password = getEncryptionPassword()
-                if (password.isEmpty())
-                    throw RestoreFailedException("Password is empty, set it in preferences!")
-                if (iv == null)
-                    throw RestoreFailedException("IV vector could not be read from properties file, decryption impossible")
+                if (encryptionKey == null)
+                    throw RestoreFailedException("Encryption key could not be derived, decryption impossible")
                 Timber.d("Decryption enabled")
-                inputStream = inputStream.decryptStream(password, getCryptoSalt(), iv)
+                // decryptStream reads the per-file GCM nonce prepended to the archive and
+                // verifies the authentication tag, throwing on any tampering/truncation.
+                inputStream = inputStream.decryptStream(encryptionKey)
             }
 
             isEncrypted && isPGPEncryptionEnabled()      -> {
@@ -487,7 +529,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
         isCompressed: Boolean,
         compressionType: String?,
         isEncrypted: Boolean,
-        iv: ByteArray?,
+        encryptionKey: SecretKey?,
         cachePath: File?,
         forceOldVersion: Boolean = false,
     ) {
@@ -497,33 +539,47 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
         }
         var tempDir: RootFile? = null
         try {
-            TarArchiveInputStream(
-                openArchiveFile(archive, isCompressed, compressionType, isEncrypted, iv)
-            ).use { archiveStream ->
-                if (pref_restoreAvoidTemporaryCopy.value) {
+            if (pref_restoreAvoidTemporaryCopy.value) {
+                // The user opted out of the temporary copy: data is written straight to the
+                // target and the GCM tag is only verified when the stream closes afterwards.
+                // A tampered archive is still rejected (an exception aborts the restore), but
+                // it may leave partially-written data behind - the documented trade-off of
+                // this option.
+                TarArchiveInputStream(
+                    openArchiveFile(archive, isCompressed, compressionType, isEncrypted, encryptionKey)
+                ).use { archiveStream ->
                     // clear the data from the final directory
                     wipeDirectory(
                         targetPath,
                         NeoApp.assets.DATA_RESTORE_EXCLUDED_BASENAMES
                     )
                     archiveStream.suUnpackTo(RootFile(targetPath), forceOldVersion)
-                } else {
-                    // Create a temporary directory in OABX's cache directory and uncompress the data into it
-                    //File(cachePath, "restore_${UUID.randomUUID()}").also { it.mkdirs() }.let {
-                    Files.createTempDirectory(cachePath?.toPath(), "restore_")?.toFile()?.let {
-                        tempDir = RootFile(it)
-                        archiveStream.suUnpackTo(tempDir!!, forceOldVersion)
-                        // clear the data from the final directory
-                        wipeDirectory(
-                            targetPath,
-                            NeoApp.assets.DATA_RESTORE_EXCLUDED_BASENAMES
-                        )
-                        // Move all the extracted data into the target directory
-                        val command =
-                            "$utilBoxQ mv -f ${quote(tempDir.toString())}/* ${quote(targetPath)}/"
-                        runAsRoot(command)
-                    } ?: throw IOException("Could not create temporary directory $targetPath")
                 }
+            } else {
+                // Create a temporary directory in OABX's cache directory and uncompress the data into it
+                //File(cachePath, "restore_${UUID.randomUUID()}").also { it.mkdirs() }.let {
+                val createdTempDir = Files.createTempDirectory(cachePath?.toPath(), "restore_")
+                    ?.toFile()
+                    ?: throw IOException("Could not create temporary directory $targetPath")
+                tempDir = RootFile(createdTempDir)
+                // Unpack into the temporary directory and close the stream FIRST. Closing runs
+                // the AES-GCM doFinal() that verifies the authentication tag, so a tampered or
+                // truncated archive throws here - before the target directory is touched - and
+                // can never leave partially-restored data in the app's real data directory.
+                TarArchiveInputStream(
+                    openArchiveFile(archive, isCompressed, compressionType, isEncrypted, encryptionKey)
+                ).use { archiveStream ->
+                    archiveStream.suUnpackTo(tempDir!!, forceOldVersion)
+                }
+                // Authentication succeeded: clear the final directory and move the data in.
+                wipeDirectory(
+                    targetPath,
+                    NeoApp.assets.DATA_RESTORE_EXCLUDED_BASENAMES
+                )
+                // Move all the extracted data into the target directory
+                val command =
+                    "$utilBoxQ mv -f ${quote(tempDir.toString())}/* ${quote(targetPath)}/"
+                runAsRoot(command)
             }
         } catch (e: FileNotFoundException) {
             throw RestoreFailedException("Backup archive at $archive is missing", e)
@@ -558,7 +614,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
         isCompressed: Boolean,
         compressionType: String?,
         isEncrypted: Boolean,
-        iv: ByteArray?,
+        encryptionKey: SecretKey?,
     ) {
         RootFile(targetPath).let { targetDir ->
             // Check if the archive exists, uncompressTo can also throw FileNotFoundException
@@ -571,7 +627,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
                     isCompressed,
                     compressionType,
                     isEncrypted,
-                    iv
+                    encryptionKey
                 ).use { archiveStream ->
 
                     targetDir.mkdirs()  // in case it doesn't exist
@@ -644,7 +700,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
         isCompressed: Boolean,
         compressionType: String?,
         isEncrypted: Boolean,
-        iv: ByteArray?,
+        encryptionKey: SecretKey?,
         cachePath: File?,
         forceOldVersion: Boolean = false,
     ) {
@@ -657,7 +713,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
                 isCompressed,
                 compressionType,
                 isEncrypted,
-                iv
+                encryptionKey
             )
         } else {
             return genericRestoreFromArchiveTarApi(
@@ -667,7 +723,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
                 isCompressed,
                 compressionType,
                 isEncrypted,
-                iv,
+                encryptionKey,
                 cachePath,
                 forceOldVersion
             )
@@ -860,7 +916,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
             backupArchive.isCompressed,
             backupArchive.compressionType,
             backupArchive.isEncrypted,
-            backup.iv,
+            deriveRestoreKey(backup),
             RootFile(context.cacheDir),
             isOldVersion(backup)
         )
@@ -897,7 +953,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
             backupArchive.isCompressed,
             backupArchive.compressionType,
             backupArchive.isEncrypted,
-            backup.iv,
+            deriveRestoreKey(backup),
             RootFile(deviceProtectedStorageContext.cacheDir),
             isOldVersion(backup)
         )
@@ -930,7 +986,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
             backupArchive.isCompressed,
             backupArchive.compressionType,
             backupArchive.isEncrypted,
-            backup.iv,
+            deriveRestoreKey(backup),
             context.externalCacheDir?.let { RootFile(it) },
             isOldVersion(backup)
         )
@@ -975,7 +1031,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
             backupArchive.isCompressed,
             backupArchive.compressionType,
             backupArchive.isEncrypted,
-            backup.iv,
+            deriveRestoreKey(backup),
             context.externalCacheDir?.let { RootFile(it) },
         )
         genericRestorePermissions(
@@ -1020,7 +1076,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
             backupArchive.isCompressed,
             backupArchive.compressionType,
             backupArchive.isEncrypted,
-            backup.iv,
+            deriveRestoreKey(backup),
             context.externalCacheDir?.let { RootFile(it) }
         )
         genericRestorePermissions(

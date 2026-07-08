@@ -1,6 +1,17 @@
 CHANGELOG
 =========
 
+Unreleased
+------------
+
+### Security
+
+- Update: Strengthen backup password encryption — PBKDF2-HMAC-SHA256 raised to 600,000 iterations (OWASP 2023) with a random per-backup salt recorded in each backup's metadata
+- Fix: Authenticate encrypted backups end to end with AES-GCM, so tampered or truncated archives are now rejected on restore instead of being silently accepted as (partial) data
+- Fix: Use a fresh nonce for every encrypted archive to eliminate AES-GCM nonce reuse across the files of a backup
+- Update: Store the private settings vault (encryption password / PGP passphrase) in an Android Keystore-backed AES-GCM store, replacing the deprecated androidx.security:security-crypto library; existing values are migrated automatically on first launch
+- Note: Encrypted backups written by this version use a new on-disk format and are intentionally not restorable by earlier releases
+
 8.3.18 (03.05.2026) +20 Commits,  +30 Translations
 ------------
 

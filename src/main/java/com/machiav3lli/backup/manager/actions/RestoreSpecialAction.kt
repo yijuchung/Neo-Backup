@@ -76,7 +76,7 @@ class RestoreSpecialAction(context: Context, work: AppActionWork?, shell: ShellH
                 backupArchive.isCompressed,
                 backupArchive.compressionType,
                 backupArchive.isEncrypted,
-                backup.iv,
+                deriveRestoreKey(backup),
                 RootFile(context.cacheDir),
                 isOldVersion(backup)
             )

@@ -652,11 +652,6 @@ val persist_ignoreBatteryOptimization = BooleanPref(
     defaultValue = false
 )
 
-val persist_salt = StringPref(
-    key = "persist.salt",
-    defaultValue = ""
-)
-
 val persist_skippedEncryptionCounter = IntPref(
     key = "persist.skippedEncryptionCounter",
     entries = (0..100).toList(),
