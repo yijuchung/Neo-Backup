@@ -31,7 +31,7 @@ import javax.crypto.*
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
-import kotlin.random.Random
+import java.security.SecureRandom
 
 /**
  * Crypto. The class to handle encryption and decryption of streams.
@@ -60,8 +60,8 @@ private const val ENCRYPTION_SETUP_FAILED = "Could not setup encryption"
  */
 private const val DEFAULT_SECRET_KEY_FACTORY_ALGORITHM = "PBKDF2withHmacSHA256"
 const val CIPHER_ALGORITHM = "AES/GCM/NoPadding"
-val DEFAULT_IV = ByteArray(Cipher.getInstance(CIPHER_ALGORITHM).blockSize) { 0 }
 private const val DEFAULT_IV_BLOCK_SIZE = 32 // 256 bit
+private const val GCM_NONCE_LENGTH = 12 // 96 bit, recommended nonce size for AES-GCM
 private const val ITERATION_COUNT = 2020
 private const val KEY_LENGTH = 256
 
@@ -105,6 +105,8 @@ fun OutputStream.encryptStream(
     iv: ByteArray?,
     cipherAlgorithm: String = CIPHER_ALGORITHM
 ): CipherOutputStream = try {
+    if (iv == null || iv.isEmpty())
+        throw CryptoSetupException(IllegalArgumentException("Missing IV for encryption"))
     val cipher = Cipher.getInstance(cipherAlgorithm)
     val ivParams = IvParameterSpec(iv)
     cipher.init(Cipher.ENCRYPT_MODE, secret, ivParams)
@@ -139,8 +141,10 @@ fun InputStream.decryptStream(
     iv: ByteArray?,
     cipherAlgorithm: String = CIPHER_ALGORITHM
 ): CipherInputStream = try {
+    if (iv == null || iv.isEmpty())
+        throw CryptoSetupException(IllegalArgumentException("Missing IV for decryption"))
     val cipher = Cipher.getInstance(cipherAlgorithm)
-    val ivParams = IvParameterSpec(iv ?: DEFAULT_IV)
+    val ivParams = IvParameterSpec(iv)
     cipher.init(Cipher.DECRYPT_MODE, secret, ivParams)
     CipherInputStream(this, cipher)
 } catch (e: NoSuchPaddingException) {
@@ -154,7 +158,10 @@ fun InputStream.decryptStream(
 }
 
 fun initIv(cipherAlgorithm: String): ByteArray {
-    val blockSize: Int = try {
+    val size: Int = if (cipherAlgorithm.contains("GCM")) {
+        // AES-GCM: use the recommended 96-bit nonce.
+        GCM_NONCE_LENGTH
+    } else try {
         val cipher = Cipher.getInstance(cipherAlgorithm)
         cipher.blockSize
     } catch (e: NoSuchAlgorithmException) {
@@ -165,7 +172,7 @@ fun initIv(cipherAlgorithm: String): ByteArray {
     } catch (e: NoSuchPaddingException) {
         DEFAULT_IV_BLOCK_SIZE
     }
-    // IV is nothing secret. Could also be constant, but why not spend a few cpu cycles to have
-    // it dynamic, if the algorithm changes?
-    return Random.nextBytes(blockSize)
+    // The IV/nonce is not secret, but for AES-GCM it MUST be unique per key and unpredictable,
+    // so it is generated with a cryptographically secure RNG rather than kotlin.random.Random.
+    return ByteArray(size).also { SecureRandom().nextBytes(it) }
 }

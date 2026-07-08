@@ -36,10 +36,42 @@ import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
+import java.nio.file.Paths
 import java.text.SimpleDateFormat
 import java.util.*
 
 const val BUFFER_SIZE = 8 * 1024 * 1024
+
+/**
+ * SECURITY: purely lexical containment check used to defend against archive path
+ * traversal ("tar slip"). Resolves [name] against [baseDir] and returns the resulting
+ * path only if it stays inside [baseDir]. Absolute names and "../" escapes return null.
+ * This is intentionally lexical (it does not touch the filesystem) so it cannot be
+ * fooled by, or accidentally follow, symlinks while running as root.
+ */
+internal fun safeResolveInside(baseDir: File, name: String): File? = try {
+    val base = Paths.get(baseDir.absolutePath).normalize()
+    val resolved = base.resolve(name).normalize()
+    if (resolved == base || resolved.startsWith(base)) File(resolved.toString())
+    else null
+} catch (_: Exception) {
+    null
+}
+
+/**
+ * SECURITY: validates that a link entry's target ([linkName]), resolved relative to the
+ * link's own parent directory, stays inside [baseDir]. Rejecting escaping link targets
+ * prevents the classic tar-slip write-through (create a symlink pointing outside the
+ * target dir, then write a file through it as root).
+ */
+internal fun isLinkTargetInside(baseDir: File, linkFile: File, linkName: String): Boolean = try {
+    val base = Paths.get(baseDir.absolutePath).normalize()
+    val parent = Paths.get(linkFile.absolutePath).normalize().parent ?: base
+    val resolved = parent.resolve(linkName).normalize()
+    resolved == base || resolved.startsWith(base)
+} catch (_: Exception) {
+    false
+}
 
 // octal
 
@@ -196,6 +228,12 @@ fun TarArchiveInputStream.suUnpackTo(targetDir: RootFile, forceOldVersion: Boole
     val strictHardLinks = pref_strictHardLinks.value && !forceOldVersion
     val postponeInfo = mutableMapOf<String, TarArchiveEntry>()
     generateSequence { nextTarEntry }.forEach { tarEntry ->
+        // SECURITY: reject entries whose path escapes targetDir (tar path traversal).
+        // Must run before any mkdir/write/link, since extraction happens as root.
+        if (safeResolveInside(targetDir, tarEntry.name) == null) {
+            Timber.e("Rejecting tar entry escaping target dir: ${tarEntry.name}")
+            return@forEach
+        }
         val targetFile = RootFile(targetDir, tarEntry.name)
         Timber.d("Extracting ${tarEntry.name} (filesize: ${tarEntry.realSize})")
         targetFile.parentFile?.let {
@@ -220,6 +258,11 @@ fun TarArchiveInputStream.suUnpackTo(targetDir: RootFile, forceOldVersion: Boole
                 postponeAttribs = true
             }
             tarEntry.isLink                             -> {
+                // SECURITY: reject links whose target escapes targetDir (tar slip).
+                if (!isLinkTargetInside(targetDir, targetFile, tarEntry.linkName)) {
+                    Timber.e("Rejecting hardlink escaping target dir: ${tarEntry.name} -> ${tarEntry.linkName}")
+                    return@forEach
+                }
                 // OABX v7 tarapi implementation stores all links as hard links (bug)
                 // and extracts all links as symlinks (repair)
                 if (strictHardLinks)
@@ -242,6 +285,11 @@ fun TarArchiveInputStream.suUnpackTo(targetDir: RootFile, forceOldVersion: Boole
                 doAttribs = false
             }
             tarEntry.isSymbolicLink                     -> {
+                // SECURITY: reject symlinks whose target escapes targetDir (tar slip).
+                if (!isLinkTargetInside(targetDir, targetFile, tarEntry.linkName)) {
+                    Timber.e("Rejecting symlink escaping target dir: ${tarEntry.name} -> ${tarEntry.linkName}")
+                    return@forEach
+                }
                 try {
                     runAsRoot(
                         "$qUtilBox ln -s ${quote(tarEntry.linkName)} ${quote(targetFile)}"

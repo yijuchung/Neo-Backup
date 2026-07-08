@@ -133,6 +133,11 @@ android {
             )
         }
     }
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 composeCompiler {
@@ -206,6 +211,10 @@ dependencies {
     androidTestImplementation(libs.test.runner)
     implementation(libs.test.rules)
     implementation(libs.test.ext)
+
+    // Local JVM unit tests (fast, run in CI without a device) for security-critical
+    // pure logic: shell quoting, command splitting, archive path-traversal, key derivation.
+    testImplementation("junit:junit:4.13.2")
 
     // compose testing
     // Test rules and transitive dependencies:

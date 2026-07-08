@@ -40,6 +40,7 @@ import com.machiav3lli.backup.data.preferences.traceTiming
 import com.machiav3lli.backup.data.repository.PackageRepository
 import com.machiav3lli.backup.manager.handler.LogsHandler.Companion.logException
 import com.machiav3lli.backup.manager.handler.ShellCommands.Companion.currentProfile
+import com.machiav3lli.backup.manager.handler.ShellHandler.Companion.quote
 import com.machiav3lli.backup.manager.handler.ShellHandler.Companion.runAsRoot
 import com.machiav3lli.backup.ui.pages.pref_backupSuspendApps
 import com.machiav3lli.backup.ui.pages.pref_createInvalidBackups
@@ -701,7 +702,7 @@ suspend fun Context.updateAppTables() {
                     NeoApp.main?.whileShowingSnackBar(getString(R.string.supended_apps_cleanup)) {
                         // cleanup suspended package if lock file found
                         this.forEach { packageName ->
-                            runAsRoot("pm unsuspend --user $profileId $packageName")
+                            runAsRoot("pm unsuspend --user $profileId ${quote(packageName)}")
                         }
                         NeoApp.appsSuspendedChecked = true
                     }

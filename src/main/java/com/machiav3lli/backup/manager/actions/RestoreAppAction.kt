@@ -363,7 +363,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
                     .filterNot { it.isEmpty() }
                     .forEach { p ->
                         try {
-                            runAsRoot("pm grant --user $profileId ${backup.packageName} $p")
+                            runAsRoot("pm grant --user $profileId ${quote(backup.packageName)} ${quote(p)}")
                         } catch (e: ShellCommandFailedException) {
                             val details = e.shellResult.err
                                 .joinToString("\n")
@@ -1040,11 +1040,11 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
             "cat", quote(apkFile.absolutePath),
             "|",
             "pm", "install",
-            basePackageName?.let { "-p $basePackageName" },
+            basePackageName?.let { "-p ${quote(it)}" },
             if (isRestoreAllPermissions) "-g" else null,
             if (isAllowDowngrade) "-d" else null,
             if (hasPmBypassLowTargetSDKBlock) "--bypass-low-target-sdk-block" else null,
-            "-i ${pref_installationPackage.value}",
+            "-i ${quote(pref_installationPackage.value)}",
             "-t",
             "-r",
             "-S", apkFile.length(),
@@ -1061,7 +1061,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
             if (isRestoreAllPermissions) "-g" else null,
             if (isAllowDowngrade) "-d" else null,
             if (hasPmBypassLowTargetSDKBlock) "--bypass-low-target-sdk-block" else null,
-            "-i", pref_installationPackage.value,
+            "-i", quote(pref_installationPackage.value),
             "-t",
             "-r",
             "-S", sumSize,
@@ -1078,7 +1078,7 @@ open class RestoreAppAction(context: Context, work: AppActionWork?, shell: Shell
             "pm", "install-write",
             "-S", apkFile.length(),
             sessionId,
-            apkFile.name,
+            quote(apkFile.name),
         ).joinToString(" ")
 
 

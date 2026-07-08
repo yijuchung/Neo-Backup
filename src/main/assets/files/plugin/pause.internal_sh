@@ -37,7 +37,7 @@ if [[ $command == "pre-backup" ]]; then
   # am kill --user $profileid $package
 
   if $suspend; then
-    pm suspend --user $profileid $package >/dev/null
+    pm suspend --user $profileid "$package" >/dev/null
     $utilbox sleep 3
   fi
 
@@ -47,7 +47,7 @@ if [[ $command == "pre-backup" ]]; then
       $utilbox ls -l /proc/*/fd/* 2>/dev/null |
           $utilbox grep -E "/data/data/|/media/" |
           #$utilbox grep -E "/data/|/media/" |  #TODO add an option for wider catching
-          $utilbox grep -F /$package/ |
+          $utilbox grep -F "/$package/" |
           $utilbox cut -s -d / -f 3
     ) |
     $utilbox sort -u -n
@@ -109,7 +109,7 @@ if [[ $command == "post-backup" ]]; then
   if [[ -n $* ]]; then $utilbox kill -CONT "$@"; fi
 
   if $suspend; then
-    pm unsuspend --user $profileid $package
+    pm unsuspend --user $profileid "$package"
   fi
 
   exit
@@ -143,7 +143,7 @@ if [[ $command == "pre-restore" ]]; then
 
     # kill app and all of its services without canceling it's scheduled alarms and jobs.
     # if command does not exist (or fails) stop everything instead
-    am stop-app --user $profileid $package || am force-stop --user $profileid $package
+    am stop-app --user $profileid "$package" || am force-stop --user $profileid "$package"
 
   fi
 
