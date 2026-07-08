@@ -77,6 +77,7 @@ import com.machiav3lli.backup.exodusUrl
 import com.machiav3lli.backup.manager.handler.ShellCommands
 import com.machiav3lli.backup.manager.handler.ShellCommands.Companion.currentProfile
 import com.machiav3lli.backup.manager.handler.ShellHandler
+import com.machiav3lli.backup.manager.handler.ShellHandler.Companion.quote
 import com.machiav3lli.backup.manager.handler.ShellHandler.Companion.runAsRoot
 import com.machiav3lli.backup.manager.tasks.BackupActionTask
 import com.machiav3lli.backup.manager.tasks.RestoreActionTask
@@ -688,7 +689,7 @@ fun AppPage(
                                     //TODO hg42 force-stop, force-close, ... ? I think these are different ones, and I don't know which.
                                     //TODO hg42 killBackgroundProcesses seems to be am kill
                                     //TODO in api33 A13 there is am stop-app which doesn't kill alarms and
-                                    runAsRoot("am stop-app --user $profileId ${pkg.packageName} || am force-stop --user $profileId ${pkg.packageName}")
+                                    runAsRoot("am stop-app --user $profileId ${quote(pkg.packageName)} || am force-stop --user $profileId ${quote(pkg.packageName)}")
                                 }
                             )
                         }

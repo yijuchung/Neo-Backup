@@ -1,28 +1,52 @@
-# This workflow will build a Java project with Gradle
-# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-gradle
+# Builds the app and runs the local JVM unit tests on every push / PR.
+# See: https://docs.github.com/actions/automating-builds-and-tests/building-and-testing-java-with-gradle
 
 name: Main CI Workflow
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
+
+permissions:
+  contents: read
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up JDK 1.8
-      uses: actions/setup-java@v1
-      with:
-        java-version: 1.8
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    - name: Compile with Gradle
-      run: ./gradlew compileReleaseSources
-    - name: Clean up
-      run: ./gradlew clean
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required SDK platform
+        run: sdkmanager "platforms;android-36"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # Runs the fast JVM unit tests (security-critical quoting / path-traversal /
+      # key-derivation checks) and then compiles the release sources.
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Compile release sources
+        run: ./gradlew compileReleaseSources --stacktrace
+
+      - name: Upload unit test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore

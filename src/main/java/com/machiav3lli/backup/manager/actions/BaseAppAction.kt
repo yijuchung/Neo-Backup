@@ -22,6 +22,7 @@ import android.content.pm.PackageManager
 import com.machiav3lli.backup.manager.handler.LogsHandler
 import com.machiav3lli.backup.manager.handler.ShellCommands.Companion.currentProfile
 import com.machiav3lli.backup.manager.handler.ShellHandler
+import com.machiav3lli.backup.manager.handler.ShellHandler.Companion.quote
 import com.machiav3lli.backup.manager.handler.ShellHandler.Companion.runAsRoot
 import com.machiav3lli.backup.manager.handler.ShellHandler.Companion.utilBoxQ
 import com.machiav3lli.backup.manager.handler.ShellHandler.ShellCommandFailedException
@@ -117,7 +118,7 @@ abstract class BaseAppAction protected constructor(
             }
             val params = stoppedPids?.joinToString("", " ") ?: ""
 
-            val cmd = "sh $script $wh-$type $profileId $utilBoxQ $options $packageName $appuid$params"
+            val cmd = "sh $script $wh-$type $profileId $utilBoxQ $options ${quote(packageName)} $appuid$params"
             traceBold { "$type $packageName: $cmd" }
 
             val shellResult = runAsRoot(cmd)
@@ -186,14 +187,14 @@ abstract class BaseAppAction protected constructor(
 
         fun isSuspended(packageName: String): Boolean {
             val profileId = currentProfile
-            return ShellUtils.fastCmdResult("pm dump --user $profileId $packageName | grep suspended=true")
+            return ShellUtils.fastCmdResult("pm dump --user $profileId ${quote(packageName)} | grep suspended=true")
         }
 
         fun cleanupSuspended(packageName: String) {
             val profileId = currentProfile
             Timber.i("cleanup $packageName")
             try {
-                runAsRoot("pm dump --user $profileId $packageName | grep suspended=true && pm unsuspend --user $profileId ${packageName}")
+                runAsRoot("pm dump --user $profileId ${quote(packageName)} | grep suspended=true && pm unsuspend --user $profileId ${quote(packageName)}")
             } catch (e: Throwable) {
             }
         }

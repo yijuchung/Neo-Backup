@@ -61,7 +61,7 @@ class ShellCommands {
                 if (!users.isNullOrEmpty()) {
                     val commands = mutableListOf<String>()
                     for (user in users) {
-                        commands.add("pm uninstall --user $user $packageName")
+                        commands.add("pm uninstall --user $user ${quote(packageName.orEmpty())}")
                     }
                     val command = commands.joinToString(" ; ")  // no dependency
                     try {
@@ -79,7 +79,7 @@ class ShellCommands {
                     // don't care for the result here, it likely fails due to file not found
                     try {
                         if (!packageName.isNullOrEmpty()) { // IMPORTANT!!! otherwise removing all in parent(!) directory
-                            val command = "$utilBoxQ rm -rf /data/lib/$packageName/*"
+                            val command = "$utilBoxQ rm -rf ${quote("/data/lib/$packageName")}/*"
                             runAsRoot(command)
                         }
                     } catch (e: ShellCommandFailedException) {
@@ -129,7 +129,7 @@ class ShellCommands {
             if (!users.isNullOrEmpty()) {
                 val commands = mutableListOf<String>()
                 for (user in users) {
-                    commands.add("pm $option --user $user $packageName")
+                    commands.add("pm $option --user $user ${quote(packageName.orEmpty())}")
                 }
                 val command = commands.joinToString(" ; ")  // no dependency
                 try {

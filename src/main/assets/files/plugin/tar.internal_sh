@@ -47,6 +47,11 @@ elif [[ $command == "extract" ]]; then
   dir=$1
   shift
 
+  # SECURITY (path traversal / "tar slip"): the util-box tar (toybox/busybox/GNU)
+  # strips leading "/" and rejects ".." path components by default, so extraction
+  # stays within "$dir". Do NOT add GNU-only flags such as --no-absolute-filenames
+  # here: toybox tar does not recognize them and would abort every restore.
+  # The commons-compress based API path enforces the same containment in Kotlin.
   $utilbox tar -x -o -f "$archive" -C "$dir" $exclude
 
   exit $?
