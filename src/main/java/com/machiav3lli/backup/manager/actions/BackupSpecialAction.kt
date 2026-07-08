@@ -29,6 +29,7 @@ import com.machiav3lli.backup.manager.handler.ShellHandler
 import com.machiav3lli.backup.manager.handler.ShellHandler.ShellCommandFailedException
 import com.machiav3lli.backup.manager.tasks.AppActionWork
 import com.machiav3lli.backup.utils.CryptoSetupException
+import javax.crypto.SecretKey
 import timber.log.Timber
 import java.io.File
 
@@ -51,7 +52,7 @@ class BackupSpecialAction(context: Context, work: AppActionWork?, shell: ShellHa
     override fun backupData(
         app: Package,
         backupInstanceDir: StorageFile,
-        iv: ByteArray?
+        encryptionKey: SecretKey?
     ): Boolean {
         Timber.i("$app: Backup special data")
         require(app.packageInfo is SpecialInfo) { "Provided app is not an instance of SpecialAppMetaInfo" }
@@ -104,7 +105,7 @@ class BackupSpecialAction(context: Context, work: AppActionWork?, shell: ShellHa
                 }
                 filesToBackup.addAll(fileInfos)
             }
-            genericBackupData(BACKUP_DIR_DATA, backupInstanceDir, filesToBackup, true, iv)
+            genericBackupData(BACKUP_DIR_DATA, backupInstanceDir, filesToBackup, true, encryptionKey)
         } catch (e: RuntimeException) {
             throw BackupFailedException("${e.message}", e)
         } catch (e: ShellCommandFailedException) {
@@ -131,21 +132,21 @@ class BackupSpecialAction(context: Context, work: AppActionWork?, shell: ShellHa
     override fun backupDeviceProtectedData(
         app: Package,
         backupInstanceDir: StorageFile,
-        iv: ByteArray?
+        encryptionKey: SecretKey?
     ): Boolean = // stub
         false
 
     override fun backupExternalData(
         app: Package,
         backupInstanceDir: StorageFile,
-        iv: ByteArray?
+        encryptionKey: SecretKey?
     ): Boolean = // stub
         false
 
     override fun backupObbData(
         app: Package,
         backupInstanceDir: StorageFile,
-        iv: ByteArray?
+        encryptionKey: SecretKey?
     ): Boolean = // stub
         false
 

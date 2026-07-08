@@ -35,7 +35,6 @@ import com.machiav3lli.backup.config.BuildConfig
 import com.machiav3lli.backup.data.entity.StorageFile
 import com.machiav3lli.backup.manager.handler.LogsHandler.Companion.logException
 import com.machiav3lli.backup.manager.tasks.RefreshBackupsWorker
-import com.machiav3lli.backup.ui.pages.persist_salt
 import com.machiav3lli.backup.ui.pages.pref_allowDowngrade
 import com.machiav3lli.backup.ui.pages.pref_appAccentColor
 import com.machiav3lli.backup.ui.pages.pref_appSecondaryColor
@@ -61,7 +60,8 @@ import com.machiav3lli.backup.ui.pages.pref_restoreExternalData
 import com.machiav3lli.backup.ui.pages.pref_restoreMediaData
 import com.machiav3lli.backup.ui.pages.pref_restoreObbData
 import com.machiav3lli.backup.ui.pages.pref_shadowRootFile
-import java.nio.charset.StandardCharsets
+import timber.log.Timber
+import java.io.File
 import java.util.Locale
 
 const val READ_PERMISSION = 2
@@ -70,25 +70,80 @@ const val SMS_PERMISSION = 4
 const val CONTACTS_PERMISSION = 5
 const val CALLLOGS_PERMISSION = 6
 
+// Keystore-backed private-prefs vault (replaces androidx.security EncryptedSharedPreferences).
+private const val PREFS_SHARED_PRIVATE_V2 = "com.machiav3lli.backup.private.v2"
+private const val PRIVATE_PREFS_KEY_ALIAS = "NeoBackupPrivatePrefsKey"
+private const val PRIVATE_PREFS_MIGRATED_FLAG = "persist.privatePrefsMigratedToKeystore"
+
 fun Context.getDefaultSharedPreferences(): SharedPreferences =
     PreferenceManager.getDefaultSharedPreferences(this)
 
 fun Context.getPrivateSharedPrefs(): SharedPreferences {
-    val masterKey = MasterKey.Builder(this).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
-    return EncryptedSharedPreferences.create(
-        this,
-        PREFS_SHARED_PRIVATE,
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    val backing = getSharedPreferences(PREFS_SHARED_PRIVATE_V2, Context.MODE_PRIVATE)
+    val prefs = KeystoreEncryptedPreferences(backing, PRIVATE_PREFS_KEY_ALIAS)
+    migrateLegacyPrivatePrefs(prefs)
+    return prefs
 }
 
-fun getCryptoSalt(): ByteArray {
-    val userSalt = persist_salt.value
-    return if (userSalt.isNotEmpty()) {
-        userSalt.toByteArray(StandardCharsets.UTF_8)
-    } else FALLBACK_SALT
+/**
+ * One-time transitional migration off the deprecated `androidx.security:security-crypto`
+ * library. If the legacy `EncryptedSharedPreferences` vault file is present and this migration
+ * has not run yet, its entries are read once and copied into the Keystore-backed
+ * [KeystoreEncryptedPreferences], then a flag is set so it never runs again.
+ *
+ * This is intentionally the ONLY remaining use of `androidx.security.crypto` in the app: the
+ * runtime read/write path uses [KeystoreEncryptedPreferences] exclusively. The dependency is
+ * kept solely for this read path and can be dropped in a future release.
+ */
+private fun Context.migrateLegacyPrivatePrefs(target: KeystoreEncryptedPreferences) {
+    val flags = getDefaultSharedPreferences()
+    if (flags.getBoolean(PRIVATE_PREFS_MIGRATED_FLAG, false)) return
+    try {
+        val legacyFile = File(
+            File(applicationInfo.dataDir, "shared_prefs"),
+            "$PREFS_SHARED_PRIVATE.xml"
+        )
+        if (!legacyFile.exists()) {
+            // Nothing to migrate (fresh install, or the legacy vault was never created).
+            flags.edit().putBoolean(PRIVATE_PREFS_MIGRATED_FLAG, true).apply()
+            return
+        }
+        val masterKey = MasterKey.Builder(this)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        val legacy = EncryptedSharedPreferences.create(
+            this,
+            PREFS_SHARED_PRIVATE,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+        val entries = legacy.all
+        val editor = target.edit()
+        entries.forEach { (key, value) ->
+            when (value) {
+                is String  -> editor.putString(key, value)
+                is Boolean -> editor.putBoolean(key, value)
+                is Int     -> editor.putInt(key, value)
+                is Long    -> editor.putLong(key, value)
+                is Float   -> editor.putFloat(key, value)
+                is Set<*>  -> editor.putStringSet(
+                    key,
+                    value.filterIsInstance<String>().toMutableSet(),
+                )
+            }
+        }
+        // commit() (not apply()) so the re-encrypted values are on disk before we set the
+        // one-shot flag; otherwise a crash between the two writes could drop the password.
+        if (editor.commit()) {
+            flags.edit().putBoolean(PRIVATE_PREFS_MIGRATED_FLAG, true).apply()
+            Timber.i("Migrated ${entries.size} private preference(s) to the Keystore vault")
+        }
+    } catch (e: Throwable) {
+        // Leave the flag unset so a later launch can retry; never lose the saved password on a
+        // transient keystore/decryption error.
+        logException(e, "Could not migrate legacy private preferences to the Keystore vault")
+    }
 }
 
 fun isEncryptionEnabled(): Boolean =

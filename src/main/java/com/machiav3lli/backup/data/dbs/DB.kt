@@ -50,7 +50,7 @@ import org.koin.dsl.module
         SpecialInfo::class,
         Backup::class,
     ],
-    version = 8330,
+    version = 8331,
     exportSchema = true,
     views = [
         ExtrasTags::class,
@@ -66,6 +66,7 @@ import org.koin.dsl.module
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 8328),
         AutoMigration(from = 8328, to = 8330),
+        AutoMigration(from = 8330, to = 8331),
     ]
 )
 @TypeConverters(Converters::class)

@@ -75,6 +75,14 @@ data class Backup @OptIn(kotlinx.serialization.ExperimentalSerializationApi::cla
     val compressionType: String? = null,
     val cipherType: String? = null,
     val iv: ByteArray? = byteArrayOf(),
+    // Per-backup key-derivation parameters, so each backup is self-describing and can be
+    // decrypted without relying on the current (mutable) app-wide settings. Null for
+    // unencrypted backups or backups written before these fields existed.
+    val kdfSalt: ByteArray? = null,
+    val kdfIterations: Int? = null,
+    val kdfAlgorithm: String? = null,
+    val keyLength: Int? = null,
+    val gcmTagBits: Int? = null,
     val cpuArch: String?,
     val permissions: List<String> = listOf(),
     val size: Long = 0,
@@ -94,6 +102,11 @@ data class Backup @OptIn(kotlinx.serialization.ExperimentalSerializationApi::cla
         compressionType: String?,
         cipherType: String?,
         iv: ByteArray?,
+        kdfSalt: ByteArray? = null,
+        kdfIterations: Int? = null,
+        kdfAlgorithm: String? = null,
+        keyLength: Int? = null,
+        gcmTagBits: Int? = null,
         cpuArch: String?,
         permissions: List<String>,
         size: Long,
@@ -119,6 +132,11 @@ data class Backup @OptIn(kotlinx.serialization.ExperimentalSerializationApi::cla
         compressionType = compressionType,
         cipherType = cipherType,
         iv = iv,
+        kdfSalt = kdfSalt,
+        kdfIterations = kdfIterations,
+        kdfAlgorithm = kdfAlgorithm,
+        keyLength = keyLength,
+        gcmTagBits = gcmTagBits,
         cpuArch = cpuArch,
         permissions = permissions.sorted(),
         size = size,
@@ -173,6 +191,8 @@ data class Backup @OptIn(kotlinx.serialization.ExperimentalSerializationApi::cla
             ", compressionType='" + compressionType + '\'' +
             ", cipherType='" + cipherType + '\'' +
             ", iv='" + iv + '\'' +
+            ", kdfIterations='" + kdfIterations + '\'' +
+            ", kdfAlgorithm='" + kdfAlgorithm + '\'' +
             ", permissions='" + permissions + '\'' +
             ", persistent=" + persistent +
             ", note='" + note + '\'' +
@@ -203,6 +223,11 @@ data class Backup @OptIn(kotlinx.serialization.ExperimentalSerializationApi::cla
                 || iv != null && other.iv == null
                 || iv != null && !iv.contentEquals(other.iv)
                 || iv == null && other.iv != null
+                || !kdfSalt.contentEquals(other.kdfSalt)
+                || kdfIterations != other.kdfIterations
+                || kdfAlgorithm != other.kdfAlgorithm
+                || keyLength != other.keyLength
+                || gcmTagBits != other.gcmTagBits
                 || cpuArch != other.cpuArch
                 || isEncrypted != other.isEncrypted
                 || permissions != other.permissions
@@ -235,6 +260,11 @@ data class Backup @OptIn(kotlinx.serialization.ExperimentalSerializationApi::cla
         result = 31 * result + (compressionType?.hashCode() ?: 0)
         result = 31 * result + (cipherType?.hashCode() ?: 0)
         result = 31 * result + (iv?.contentHashCode() ?: 0)
+        result = 31 * result + (kdfSalt?.contentHashCode() ?: 0)
+        result = 31 * result + (kdfIterations ?: 0)
+        result = 31 * result + (kdfAlgorithm?.hashCode() ?: 0)
+        result = 31 * result + (keyLength ?: 0)
+        result = 31 * result + (gcmTagBits ?: 0)
         result = 31 * result + (cpuArch?.hashCode() ?: 0)
         result = 31 * result + isEncrypted.hashCode()
         result = 31 * result + permissions.hashCode()

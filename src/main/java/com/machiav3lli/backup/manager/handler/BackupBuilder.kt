@@ -41,7 +41,11 @@ class BackupBuilder(
     backupRoot: StorageFile,
 ) {
     private val backupDate: LocalDateTime = LocalDateTime.now()
-    private var iv = byteArrayOf()
+    private var kdfSalt: ByteArray? = null
+    private var kdfIterations: Int? = null
+    private var kdfAlgorithm: String? = null
+    private var keyLength: Int? = null
+    private var gcmTagBits: Int? = null
     private var hasApk = false
     private var hasAppData = false
     private var hasDevicesProtectedData = false
@@ -96,8 +100,18 @@ class BackupBuilder(
         }
     }
 
-    fun setIv(iv: ByteArray) {
-        this.iv = iv
+    fun setKdfParams(
+        salt: ByteArray,
+        iterations: Int,
+        algorithm: String,
+        keyLength: Int,
+        gcmTagBits: Int,
+    ) {
+        this.kdfSalt = salt
+        this.kdfIterations = iterations
+        this.kdfAlgorithm = algorithm
+        this.keyLength = keyLength
+        this.gcmTagBits = gcmTagBits
     }
 
     fun setHasApk(hasApk: Boolean) {
@@ -165,7 +179,12 @@ class BackupBuilder(
                 hasMediaData = hasMediaData,
                 compressionType = compressionType,
                 cipherType = cipherType,
-                iv = iv,
+                iv = byteArrayOf(),
+                kdfSalt = kdfSalt,
+                kdfIterations = kdfIterations,
+                kdfAlgorithm = kdfAlgorithm,
+                keyLength = keyLength,
+                gcmTagBits = gcmTagBits,
                 cpuArch = cpuArch,
                 permissions = if (packageInfo is AppInfo) packageInfo.permissions else emptyList(),
                 size = size,

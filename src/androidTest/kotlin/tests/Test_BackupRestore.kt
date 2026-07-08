@@ -254,16 +254,16 @@ class Test_BackupRestore {
     fun backup(compress: Boolean) {
         if (!backupCreated) {
             pref_encryption_mode.value = ENCRYPTION.NONE.ordinal
-            val iv = null     //initIv(CIPHER_ALGORITHM)
+            val encryptionKey = null     // encryption disabled for this test
             val backupAction = BackupAppAction(context, null, shellHandler)
             val fromDir = StorageFile(testDir)
             backupAction.genericBackupDataTarApi(
                 "data", backupDirTarApi, fromDir.toString(),
-                compress, iv
+                compress, encryptionKey
             )
             backupAction.genericBackupDataTarCmd(
                 "data", backupDirTarCmd, fromDir.toString(),
-                compress, iv
+                compress, encryptionKey
             )
             backupCreated = true
         }
