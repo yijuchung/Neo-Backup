@@ -54,8 +54,30 @@ jobs:
 
       # Upload the SARIF file generated in the previous step, but only when it was
       # actually produced (skipped when the scan step failed to generate results).
+      #
+      # Codacy emits one SARIF "run" per tool, all sharing an empty category, and
+      # github/codeql-action/upload-sarif rejects "multiple SARIF runs with the
+      # same category" (see the 2025-07-21 code scanning changelog). Give each run
+      # a unique automationDetails.id so every category maps to a single run. jq is
+      # preinstalled on ubuntu-latest. If the file isn't valid JSON (e.g. the scan
+      # only partially ran) we leave it untouched and let the guarded upload skip.
+      - name: Normalize SARIF categories
+        if: ${{ hashFiles('results.sarif') != '' }}
+        run: |
+          if jq -e . results.sarif >/dev/null 2>&1; then
+            jq '.runs |= [ to_entries[] | .value.automationDetails.id = ((.value.tool.driver.name // "codacy") + "-" + (.key|tostring)) | .value ]' \
+              results.sarif > results.normalized.sarif
+            mv results.normalized.sarif results.sarif
+            echo "Normalized $(jq '.runs | length' results.sarif) SARIF run(s) to unique categories."
+          else
+            echo "results.sarif is not valid JSON; leaving it untouched."
+          fi
+
+      # Upload is advisory: matching the max-allowed-issues policy above, a failure
+      # to surface Codacy results must not turn the PR red.
       - name: Upload SARIF results file
         if: ${{ hashFiles('results.sarif') != '' }}
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
