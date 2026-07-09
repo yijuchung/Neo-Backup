@@ -62,7 +62,6 @@ import com.machiav3lli.backup.ui.pages.pref_fixNavBarOverlap
 import com.machiav3lli.backup.utils.SystemUtils.numCores
 import com.machiav3lli.backup.utils.SystemUtils.runParallel
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -466,7 +465,6 @@ fun List<Package>.withBackups() = filter { it.hasBackups }
 fun List<Package>.installed() = filter { it.isInstalled }
 
 // menu actions should continue even if the ui is left
-val menuScope = MainScope()
 val menuPool = Executors.newFixedThreadPool(numCores).asCoroutineDispatcher()
 // Dispatchers.Default  unclear and can do anything in the future
 // Dispatchers.IO       creates many threads (~65)
@@ -499,7 +497,7 @@ suspend fun forEachPackage(
     todo: suspend (p: Package) -> Unit = {},
 ) {
     if (parallel) {
-        runParallel(packages, scope = menuScope, pool = menuPool) {
+        runParallel(packages, pool = menuPool) {
             if (select == true && selection.contains(it.packageName))
                 toggleSelection(it.packageName)
             traceContextMenu { "$action ${it.packageName}" }
