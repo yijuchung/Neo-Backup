@@ -36,10 +36,6 @@ ksp {
 
 kotlin {
     jvmToolchain(21)
-
-    compilerOptions {
-        freeCompilerArgs.add("-Xexplicit-backing-fields")
-    }
 }
 
 android {
