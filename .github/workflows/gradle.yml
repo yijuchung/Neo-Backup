@@ -36,9 +36,14 @@ jobs:
         run: chmod +x gradlew
 
       # Runs the fast JVM unit tests (security-critical quoting / path-traversal /
-      # key-derivation checks) and then compiles the release sources.
+      # key-derivation checks), enforces the coverage gate, then compiles release sources.
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
+
+      # Fails the build if line coverage of the security-critical modules drops below the
+      # threshold configured in build.gradle.kts (kover { ... minBound(85) }).
+      - name: Verify security-module coverage gate
+        run: ./gradlew koverXmlReportDebug koverVerifyDebug --stacktrace
 
       - name: Compile release sources
         run: ./gradlew compileReleaseSources --stacktrace
@@ -49,4 +54,12 @@ jobs:
         with:
           name: unit-test-report
           path: build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kover-coverage-report
+          path: build/reports/kover
           if-no-files-found: ignore
