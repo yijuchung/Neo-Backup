@@ -129,4 +129,4 @@ jobs:
           body_path: release_notes.md
           files: ${{ steps.apk.outputs.path }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}

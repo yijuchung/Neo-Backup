@@ -63,8 +63,8 @@ android {
         applicationId = "com.machiav3lli.backup"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8332
-        versionName = "1.0.0"
+        versionCode = 8334
+        versionName = "8.3.18-fork.1"
         // MAJOR/MINOR are the backup on-disk format version (backupVersionCode =
         // MAJOR*1000+MINOR), not the app's marketing version. Restore gates on
         // backupVersionCode >= 8000, so these must stay put to keep older backups readable.
