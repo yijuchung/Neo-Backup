@@ -768,75 +768,7 @@ class ShellHandler {
 
         val profileId: String get() = ShellCommands.currentProfile.toString()
 
-        fun splitCommand(command: String): List<String> {
-            val result = mutableListOf<String>()
-            var current = StringBuilder()
-            var inDoubleQuotes = false
-            var inSingleQuotes = false
-            var escapeNext = false
-
-            for (char in command) {
-                when {
-                    escapeNext          -> {
-                        current.append(char)
-                        escapeNext = false
-                    }
-
-                    char == '\\'        -> {
-                        if (inDoubleQuotes) {
-                            escapeNext = true
-                        } else {
-                            current.append(char)
-                        }
-                    }
-
-                    char == '"'         -> {
-                        if (inSingleQuotes) {
-                            current.append(char)
-                        } else {
-                            inDoubleQuotes = !inDoubleQuotes
-                            if (!inDoubleQuotes) {
-                                result.add(current.toString())
-                                current = StringBuilder()
-                            }
-                        }
-                    }
-
-                    char == '\''        -> {
-                        if (inDoubleQuotes) {
-                            current.append(char)
-                        } else {
-                            inSingleQuotes = !inSingleQuotes
-                            if (!inSingleQuotes) {
-                                result.add(current.toString())
-                                current = StringBuilder()
-                            }
-                        }
-                    }
-
-                    char.isWhitespace() -> {
-                        if (inDoubleQuotes || inSingleQuotes) {
-                            current.append(char)
-                        } else {
-                            if (current.isNotEmpty()) {
-                                result.add(current.toString())
-                                current = StringBuilder()
-                            }
-                        }
-                    }
-
-                    else                -> {
-                        current.append(char)
-                    }
-                }
-            }
-
-            if (current.isNotEmpty()) {
-                result.add(current.toString())
-            }
-
-            return result
-        }
+        fun splitCommand(command: String): List<String> = ShellQuoting.splitCommand(command)
 
         private val checkRootScript
             get() = InternalShellScriptPlugin.findScript("checkroot").toString()
@@ -1124,29 +1056,14 @@ class ShellHandler {
             }
         }
 
-        // the Android command line shell is mksh
-        // mksh quoting
-        //   '...'  single quotes would do well, but single quotes cannot be used
-        //   $'...' dollar + single quotes need many escapes
-        //   "..."  needs only a few escaped chars (backslash, dollar, double quote, back tick)
-        //   from mksh man page:
-        //      double quote quotes all characters,
-        //          except '$' , '`' and '\' ,
-        //          up to the next unquoted double quote
-        private val charactersToBeEscaped =
-            Regex("""[\\${'$'}"`]""")   // blacklist, only escape those that are necessary
+        // Shell-argument quoting lives in the dependency-free [ShellQuoting] module so it can be
+        // unit tested on the plain JVM; these keep the historical call sites working.
+        fun quote(parameter: String): String = ShellQuoting.quote(parameter)
 
-        fun quote(parameter: String): String {
-            return "\"${parameter.replace(charactersToBeEscaped) { "\\${it.value}" }}\""
-            //return "\"${parameter.replace(charactersToBeEscaped) { "\\${(0xFF and it.value[0].code).toString(8).padStart(3, '0')}" }}\""
-        }
-
-        fun quote(parameter: File): String {
-            return quote(parameter.absolutePath)
-        }
+        fun quote(parameter: File): String = ShellQuoting.quote(parameter)
 
         fun quoteMultiple(parameters: Collection<String>): String =
-            parameters.joinToString(" ", transform = ::quote)
+            ShellQuoting.quoteMultiple(parameters)
 
         fun isFileNotFoundException(ex: ShellCommandFailedException): Boolean {
             val err = ex.shellResult.err

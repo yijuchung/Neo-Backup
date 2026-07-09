@@ -101,23 +101,19 @@ class KeystoreEncryptedPreferences(
         decrypt(backing.getString(key, null)) ?: defValue
 
     override fun getStringSet(key: String, defValues: MutableSet<String>?): MutableSet<String>? =
-        decrypt(backing.getString(key, null))
-            ?.split(STRING_SET_SEPARATOR)
-            ?.filter { it.isNotEmpty() }
-            ?.toMutableSet()
-            ?: defValues
+        PrefValueCodec.decodeStringSet(decrypt(backing.getString(key, null))) ?: defValues
 
     override fun getInt(key: String, defValue: Int): Int =
-        decrypt(backing.getString(key, null))?.toIntOrNull() ?: defValue
+        PrefValueCodec.decodeInt(decrypt(backing.getString(key, null)), defValue)
 
     override fun getLong(key: String, defValue: Long): Long =
-        decrypt(backing.getString(key, null))?.toLongOrNull() ?: defValue
+        PrefValueCodec.decodeLong(decrypt(backing.getString(key, null)), defValue)
 
     override fun getFloat(key: String, defValue: Float): Float =
-        decrypt(backing.getString(key, null))?.toFloatOrNull() ?: defValue
+        PrefValueCodec.decodeFloat(decrypt(backing.getString(key, null)), defValue)
 
     override fun getBoolean(key: String, defValue: Boolean): Boolean =
-        decrypt(backing.getString(key, null))?.toBooleanStrictOrNull() ?: defValue
+        PrefValueCodec.decodeBoolean(decrypt(backing.getString(key, null)), defValue)
 
     override fun contains(key: String): Boolean = backing.contains(key)
 
@@ -148,19 +144,19 @@ class KeystoreEncryptedPreferences(
             values: MutableSet<String>?,
         ): SharedPreferences.Editor =
             if (values == null) remove(key)
-            else putEncrypted(key, values.joinToString(STRING_SET_SEPARATOR))
+            else putEncrypted(key, PrefValueCodec.encodeStringSet(values))
 
         override fun putInt(key: String, value: Int): SharedPreferences.Editor =
-            putEncrypted(key, value.toString())
+            putEncrypted(key, PrefValueCodec.encode(value))
 
         override fun putLong(key: String, value: Long): SharedPreferences.Editor =
-            putEncrypted(key, value.toString())
+            putEncrypted(key, PrefValueCodec.encode(value))
 
         override fun putFloat(key: String, value: Float): SharedPreferences.Editor =
-            putEncrypted(key, value.toString())
+            putEncrypted(key, PrefValueCodec.encode(value))
 
         override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor =
-            putEncrypted(key, value.toString())
+            putEncrypted(key, PrefValueCodec.encode(value))
 
         override fun remove(key: String): SharedPreferences.Editor {
             editor.remove(key)
@@ -182,6 +178,5 @@ class KeystoreEncryptedPreferences(
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_IV_LENGTH = 12
         private const val GCM_TAG_BITS = 128
-        private const val STRING_SET_SEPARATOR = "\u0000"
     }
 }

@@ -192,4 +192,102 @@ class CryptoUtilsTest {
     fun decrypt_withNullKey_throws() {
         ByteArrayInputStream(ByteArray(0)).decryptStream(null as SecretKey?)
     }
+
+    // --- password-based stream overloads ------------------------------------------------
+
+    @Test
+    fun passwordBased_roundTrips() {
+        val bos = ByteArrayOutputStream()
+        bos.encryptStream("pw", salt("saltvalue"), iterationCount = 1_000).use { it.write(plain) }
+        val recovered = ByteArrayInputStream(bos.toByteArray())
+            .decryptStream("pw", salt("saltvalue"), iterationCount = 1_000)
+            .use { it.readBytes() }
+        assertArrayEquals(plain, recovered)
+    }
+
+    @Test(expected = IOException::class)
+    fun passwordBased_wrongPassword_throws() {
+        val bos = ByteArrayOutputStream()
+        bos.encryptStream("right", salt("s"), iterationCount = 1_000).use { it.write(plain) }
+        ByteArrayInputStream(bos.toByteArray())
+            .decryptStream("wrong", salt("s"), iterationCount = 1_000)
+            .use { it.readBytes() }
+    }
+
+    @Test(expected = CryptoSetupException::class)
+    fun decrypt_streamShorterThanNonce_throws() {
+        // Fewer than GCM_NONCE_LENGTH bytes: readNonce cannot fill the nonce and must fail.
+        ByteArrayInputStream(ByteArray(4)).decryptStream(testKey())
+    }
+
+    // --- initIv for non-GCM ciphers -----------------------------------------------------
+
+    @Test
+    fun initIv_usesCipherBlockSizeForNonGcm() {
+        assertEquals(16, initIv("AES/CBC/PKCS5Padding").size)
+    }
+
+    @Test
+    fun initIv_fallsBackToDefaultForUnknownCipher() {
+        // Unknown algorithm -> NoSuchAlgorithmException -> DEFAULT_IV_BLOCK_SIZE (32 bytes).
+        assertEquals(32, initIv("NoSuchCipher/XYZ/NoPadding").size)
+    }
+
+    // --- streaming edge cases -----------------------------------------------------------
+
+    @Test
+    fun encrypt_supportsByteByByteWriteAndFlush() {
+        val key = testKey()
+        val bos = ByteArrayOutputStream()
+        bos.encryptStream(key).use { out ->
+            for (b in plain) out.write(b.toInt())
+            out.flush()
+        }
+        assertArrayEquals(plain, decrypt(key, bos.toByteArray()))
+    }
+
+    @Test
+    fun decrypt_readZeroLength_returnsZeroAndLeavesStreamReadable() {
+        val key = testKey()
+        ByteArrayInputStream(encrypt(key, plain)).decryptStream(key).use { ins ->
+            assertEquals(0, ins.read(ByteArray(4), 0, 0))
+            assertArrayEquals(plain, ins.readBytes())
+        }
+    }
+
+    @Test
+    fun decrypt_partialReadThenClose_verifiesValidDataWithoutError() {
+        val large = ByteArray(64 * 1024) { (it and 0xFF).toByte() }
+        val key = testKey()
+        val ins = ByteArrayInputStream(encrypt(key, large)).decryptStream(key)
+        assertTrue(ins.read() >= 0)   // consume only one byte
+        ins.close()                   // close must drain & verify the remaining ciphertext
+    }
+
+    @Test(expected = IOException::class)
+    fun decrypt_partialReadThenClose_onTamperedData_throws() {
+        val large = ByteArray(64 * 1024) { (it and 0xFF).toByte() }
+        val key = testKey()
+        val cipherText = encrypt(key, large)
+        val i = GCM_NONCE_LENGTH + 2048
+        cipherText[i] = (cipherText[i].toInt() xor 0xFF).toByte()
+        val ins = ByteArrayInputStream(cipherText).decryptStream(key)
+        ins.read()      // read one byte, so the stream is not finalized yet
+        ins.close()     // draining the rest on close must detect the bad tag
+    }
+
+    @Test
+    fun decrypt_readSingleBytesToEof_thenStaysAtEof() {
+        val key = testKey()
+        val ins = ByteArrayInputStream(encrypt(key, plain)).decryptStream(key)
+        val out = ByteArrayOutputStream()
+        var b = ins.read()
+        while (b >= 0) {
+            out.write(b)
+            b = ins.read()          // drive read() all the way to end-of-stream
+        }
+        assertEquals(-1, ins.read()) // stays at EOF once finalized
+        ins.close()                  // already finalized -> close is a no-op drain
+        assertArrayEquals(plain, out.toByteArray())
+    }
 }
