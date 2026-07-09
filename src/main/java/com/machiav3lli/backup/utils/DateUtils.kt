@@ -33,7 +33,6 @@ const val ISO_LIKE_DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm:ss"
 const val ISO_LIKE_DATE_TIME_MIN_PATTERN = "yyyy-MM-dd HH:mm"
 const val ISO_LIKE_DATE_TIME_MS_PATTERN = "yyyy-MM-dd HH:mm:ss:SSS"
 const val FILE_DATE_TIME_MS_PATTERN = "yyyy-MM-dd-HH-mm-ss-SSS"
-const val FILE_DATE_TIME_PATTERN = "yyyy-MM-dd-HH-mm-ss"
 const val DATE_TIME_AS_VERSION_CODE_PATTERN = "yyMMddHH"
 
 val ISO_DATE_TIME_FORMAT
@@ -53,12 +52,6 @@ val ISO_DATE_TIME_FORMAT_MS
         ISO_LIKE_DATE_TIME_MS_PATTERN,
         Locale.getDefault()
     )
-
-// must be ISO time format for sane sorting yyyy, MM, dd, ...
-// and only allowed file name characters (on all systems, Windows has the smallest set)
-// not used any more, because we don't create old format
-// and detection handles millisec as optional
-//val BACKUP_DATE_TIME_FORMATTER_OLD = DateTimeFormatter.ofPattern(FILE_DATE_TIME_PATTERN)
 
 // use millisec, because computers (and users) can be faster than a sec
 val BACKUP_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern(FILE_DATE_TIME_MS_PATTERN)
