@@ -4,6 +4,9 @@ CHANGELOG
 Unreleased
 ------------
 
+1.0.0 (08.07.2026)
+------------
+
 ### Security
 
 - Update: Strengthen backup password encryption — PBKDF2-HMAC-SHA256 raised to 600,000 iterations (OWASP 2023) with a random per-backup salt recorded in each backup's metadata

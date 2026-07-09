@@ -1,0 +1,7 @@
+Security release — hardened backup encryption.
+
+Update: PBKDF2-HMAC-SHA256 raised to 600,000 iterations with a random per-backup salt
+Fix: Authenticate encrypted backups with AES-GCM; tampered/truncated archives are rejected on restore
+Fix: Fresh nonce per encrypted archive (no AES-GCM nonce reuse)
+Update: Store the settings vault in an Android Keystore-backed AES-GCM store (auto-migrated)
+Note: Encrypted backups use a new on-disk format and are not restorable by earlier releases
