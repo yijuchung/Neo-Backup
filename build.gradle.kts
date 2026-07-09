@@ -16,6 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import java.io.FileInputStream
+import java.util.Properties
+
+// Optional release signing. Reads keystore.properties from the project root when present
+// (also populated by the CI release workflow from repository secrets). When it is absent the
+// release build stays unsigned, exactly as before — so this change is a no-op for normal builds.
+val keystorePropertiesFile: File = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+}
+val hasReleaseSigning: Boolean = keystorePropertiesFile.exists()
 
 plugins {
     alias(libs.plugins.android.application)
@@ -51,8 +64,11 @@ android {
         applicationId = "com.machiav3lli.backup"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8331
-        versionName = "8.3.18"
+        versionCode = 8334
+        versionName = "8.3.18-fork.1"
+        // MAJOR/MINOR are the backup on-disk format version (backupVersionCode =
+        // MAJOR*1000+MINOR), not the app's marketing version. Restore gates on
+        // backupVersionCode >= 8000, so these must stay put to keep older backups readable.
         buildConfigField("int", "MAJOR", "8")
         buildConfigField("int", "MINOR", "3")
 
@@ -60,8 +76,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         named("release") {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
