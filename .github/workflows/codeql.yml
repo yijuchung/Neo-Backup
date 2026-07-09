@@ -1,6 +1,11 @@
 # CodeQL static analysis for Kotlin/Java sources.
-# Uses build-mode "none" so the analysis does not require provisioning the
-# full Android SDK / Gradle build on the runner.
+#
+# This project is an Android app (Kotlin + Java, Gradle). CodeQL's "none" build
+# mode cannot extract the sources here and fails every run with
+# "CodeQL detected code written in Java/Kotlin but could not process any of it
+# using the 'none' build mode". We therefore use build-mode "manual" and compile
+# the sources ourselves (mirroring the Main CI workflow, which is known to build
+# cleanly) so CodeQL can observe the compilers and populate its database.
 name: CodeQL
 
 on:
@@ -24,12 +29,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required SDK platform
+        run: sdkmanager "platforms;android-36"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: java-kotlin
-          build-mode: none
+          build-mode: manual
           queries: security-and-quality
+
+      # build-mode: manual requires the Kotlin/Java compilers to actually run so
+      # CodeQL can trace them. --no-build-cache and --rerun-tasks defeat Gradle's
+      # build-cache / up-to-date shortcuts (the build cache is enabled via
+      # org.gradle.caching=true) that would otherwise skip compilation and leave
+      # the CodeQL database empty.
+      - name: Compile sources for CodeQL extraction
+        run: ./gradlew compileReleaseSources --stacktrace --no-build-cache --rerun-tasks
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
