@@ -12,3 +12,8 @@ release/
 neo/
 debug/
 *.salive
+
+# Release signing secrets (never commit these)
+keystore.properties
+*.jks
+*.keystore
