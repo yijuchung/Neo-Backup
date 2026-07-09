@@ -36,6 +36,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kover)
     alias(libs.plugins.stability.analyzer)
     alias(libs.plugins.gradle.toolchains) apply false
     //alias(libs.plugins.kotlin.scripting)
@@ -173,6 +174,33 @@ android {
 composeCompiler {
     reportsDestination = layout.buildDirectory.dir("compose_reports")
     metricsDestination = layout.buildDirectory.dir("compose_metrics")
+}
+
+// Coverage is enforced only on the dependency-free, security-critical pure-logic modules that
+// are unit-testable on the JVM (shell quoting, archive path containment, crypto, prefs codec).
+// The rest of the app is Compose UI / Android-framework / root-shell code that needs instrumented
+// tests, so it is intentionally excluded from this gate.
+kover {
+    reports {
+        filters {
+            includes {
+                classes(
+                    "com.machiav3lli.backup.manager.handler.ShellQuoting",
+                    "com.machiav3lli.backup.utils.PathContainmentKt",
+                    "com.machiav3lli.backup.utils.PrefValueCodec",
+                    "com.machiav3lli.backup.utils.CryptoUtilsKt",
+                    "com.machiav3lli.backup.utils.GcmCipherOutputStream",
+                    "com.machiav3lli.backup.utils.GcmVerifyingInputStream",
+                    "com.machiav3lli.backup.utils.CryptoSetupException",
+                )
+            }
+        }
+        verify {
+            rule {
+                minBound(85)
+            }
+        }
+    }
 }
 
 dependencies {

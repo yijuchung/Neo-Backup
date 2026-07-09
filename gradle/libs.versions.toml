@@ -19,6 +19,7 @@ kaml = "0.104.0"
 koin = "4.1.1"
 koin-ksp = "2.3.1"
 kotlin = "2.3.21"
+kover = "0.9.8"
 ksp = "2.3.7"
 libsu = "6.0.0"
 lifecycle = "2.10.0"
@@ -118,6 +119,7 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 stability-analyzer = { id = "com.github.skydoves.compose.stability.analyzer", version.ref = "stability-analyzer" }
 kotlin-scripting = { id = "org.jetbrains.kotlin.plugin.scripting", version.ref = "kotlin" }
 gradle-toolchains = { id = "org.gradle.toolchains.foojay-resolver-convention", version.ref = "gradle-toolchains" }

@@ -152,4 +152,46 @@ class ShellQuotingTest {
         assertEquals(emptyList<String>(), splitCommand(""))
         assertEquals(emptyList<String>(), splitCommand("   "))
     }
+
+    @Test
+    fun split_double_quote_is_literal_inside_single_quotes() {
+        assertEquals(listOf("a\"b"), splitCommand("'a\"b'"))
+    }
+
+    @Test
+    fun split_single_quote_is_literal_inside_double_quotes() {
+        assertEquals(listOf("a'b"), splitCommand("\"a'b\""))
+    }
+
+    @Test
+    fun split_backslash_is_literal_outside_double_quotes() {
+        // Outside double quotes a backslash is not an escape, it is a literal character.
+        assertEquals(listOf("a\\b"), splitCommand("a\\b"))
+    }
+
+    @Test
+    fun split_keeps_whitespace_inside_single_quotes() {
+        assertEquals(listOf("a b\tc"), splitCommand("'a b\tc'"))
+    }
+
+    // ---- quoteMultiple / quote(File): direct ShellQuoting API ----
+
+    @Test
+    fun quoteMultiple_quotes_and_space_joins_each_argument() {
+        assertEquals(
+            "\"a b\" \"\\\$x\" \"c\"",
+            ShellQuoting.quoteMultiple(listOf("a b", "\$x", "c")),
+        )
+    }
+
+    @Test
+    fun quoteMultiple_of_empty_collection_is_empty_string() {
+        assertEquals("", ShellQuoting.quoteMultiple(emptyList()))
+    }
+
+    @Test
+    fun quote_file_quotes_absolute_path() {
+        val f = java.io.File("/data/data/pkg/a b")
+        assertEquals(quote(f.absolutePath), ShellQuoting.quote(f))
+    }
 }

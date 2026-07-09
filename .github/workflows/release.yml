@@ -50,6 +50,11 @@ jobs:
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      # Enforce the security-module coverage gate (minBound(85) in build.gradle.kts)
+      # before building any release artifacts.
+      - name: Verify security-module coverage gate
+        run: ./gradlew koverXmlReportDebug koverVerifyDebug --stacktrace
+
       - name: Determine signing availability
         id: signing
         env:
